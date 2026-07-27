@@ -522,8 +522,14 @@ The enrollment needs to run as jaylee.clifton , since that user is in the IT gro
 rights. From our Meterpreter session on the target, we upload and use Rubeus to obtain a usable ticket
 for the user.
 
+<img width="907" height="838" alt="image" src="https://github.com/user-attachments/assets/a698fb90-afe2-4d55-8ae2-f2f11ff2eb47" />
+<img width="806" height="1021" alt="image" src="https://github.com/user-attachments/assets/110eb63b-c35f-4dbf-9b64-0d48a0149364" />
+The template allows the enrollee to supply the subject and issues certificates valid for server authentication,
+and our group is granted enrollment. That combination lets us request a certificate for an arbitrary DNS
+name, so we request one for wsus.logging.htb .
+<img width="829" height="1074" alt="image" src="https://github.com/user-attachments/assets/16a6f632-563a-4b6c-91de-0f7394b34819" />
 
-
+<img width="816" height="1040" alt="image" src="https://github.com/user-attachments/assets/170ed4d3-58b0-4b1f-9e7b-b2cdfa8522b6" />
 
 
 
